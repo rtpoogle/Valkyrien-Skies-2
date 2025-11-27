@@ -6,6 +6,11 @@
 <h1 align="center">
 Valkyrien Skies 2
 </h1>
+<div align="center">
+<sup>
+Unoffical update to 1.21.1
+</sup>
+</div>
 <p align="center">
 <a href="https://www.valkyrienskies.org/">Website</a> - <a href="https://www.curseforge.com/minecraft/mc-mods/valkyrien-skies">CurseForge</a> - 
 <a href="https://modrinth.com/mod/valkyrien-skies">Modrinth</a> - <a href="https://wiki.valkyrienskies.org/wiki/Main_Page">Wiki</a> - <a href="https://discord.gg/rG3QNDV">Discord</a>
@@ -16,6 +21,12 @@ performance, collisions, interactions and physics than anything prior!*
 
 ![2022-11-01_21 58 07](https://user-images.githubusercontent.com/26909616/199406363-38e1d032-9c18-4aef-a74a-23f4b268e6ad.png)
 
+<h1 align="center">
+Hey you!
+</h1>
+<p align="center">
+This is actually just a personal fork I keep for me and my bffs' modpacks. I tend to tweak and break content while updating, so you may occasionally encounter random differences from the main repo if you use my fork.
+</p>
 
 ## Installation
 
