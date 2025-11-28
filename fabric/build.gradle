@@ -41,7 +41,7 @@ dependencies {
     // modCompileOnly("maven.modrinth:create-utilities:${create_utilities_version}")
     modCompileOnly("maven.modrinth:sodium:${sodium_version}")
     // Disable indium until we update sodium to newer versions
-    // modRuntimeOnly("maven.modrinth:indium:${indium_version}")
+    //modRuntimeOnly("maven.modrinth:indium:${indium_version}")
     modImplementation("maven.modrinth:modmenu:${modmenu_version}")
 
     // Depend on the fabric API
@@ -51,7 +51,9 @@ dependencies {
         transitive = false
     }
 
-    implementation("org.valkyrienskies.core:impl:${rootProject.vs_core_version}") {
+    implementation("org.valkyrienskies.core:internal:${rootProject.vs_core_version}")
+    implementation("org.valkyrienskies.core:util:${rootProject.vs_core_version}")
+    runtimeOnly("org.valkyrienskies.core:impl:${rootProject.vs_core_version}") {
         exclude module: "netty-buffer"
         exclude module: "fastutil"
         exclude module: "kotlin-stdlib-jdk8"
@@ -68,10 +70,16 @@ dependencies {
     include("com.fasterxml:classmate:1.5.1")
     implementation("com.fasterxml:classmate:1.5.1")
 
+    // CC Tweaked
+    //modRuntimeOnly("cc.tweaked:cc-tweaked-${minecraft_version}-fabric:${cc_tweaked_version}")
     // CC Restitched
     modCompileOnly("maven.modrinth:cc-tweaked:${cc_tweaked_version}")
 
+    //Very many players
+    modImplementation("curse.maven:vmp-fabric-552542:4754074")
+
     // EMF compat
+    //todo: fix
     modCompileOnly("curse.maven:entity-model-features-844662:5696901")
     modCompileOnly("curse.maven:entity-texture-features-fabric-568563:5697084")
 

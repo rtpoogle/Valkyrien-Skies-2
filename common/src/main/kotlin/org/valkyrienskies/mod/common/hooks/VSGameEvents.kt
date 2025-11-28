@@ -1,6 +1,10 @@
 package org.valkyrienskies.mod.common.hooks
 
 import it.unimi.dsi.fastutil.objects.ObjectList
+import me.jellysquid.mods.sodium.client.render.chunk.ChunkRenderMatrices
+import me.jellysquid.mods.sodium.client.render.chunk.ChunkRenderer
+import me.jellysquid.mods.sodium.client.render.chunk.lists.SortedRenderLists
+import me.jellysquid.mods.sodium.client.render.chunk.terrain.TerrainRenderPass
 import net.minecraft.client.renderer.LevelRenderer
 import net.minecraft.client.renderer.RenderType
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher
@@ -9,6 +13,8 @@ import org.valkyrienskies.core.api.ships.ClientShip
 import org.valkyrienskies.core.api.ships.properties.ShipId
 import org.valkyrienskies.core.util.events.EventEmitterImpl
 import org.valkyrienskies.core.util.datastructures.DenseBlockPosSet
+import org.valkyrienskies.core.api.ships.Ship
+import javax.swing.text.html.parser.Entity
 
 object VSGameEvents {
 
@@ -17,7 +23,16 @@ object VSGameEvents {
 
     val renderShip = EventEmitterImpl<ShipRenderEvent>()
     val postRenderShip = EventEmitterImpl<ShipRenderEvent>()
+    val entitySectionSetShip = EventEmitterImpl<EntitySectionSetShip>()
     val shipsStartRendering = EventEmitterImpl<ShipStartRenderEvent>()
+    val renderShipSodium = EventEmitterImpl<ShipRenderEventSodium>()
+    val postRenderShipSodium = EventEmitterImpl<ShipRenderEventSodium>()
+    val shipsStartRenderingSodium = EventEmitterImpl<ShipStartRenderEventSodium>()
+
+    data class EntitySectionSetShip(
+        val section: EntitySection<EntityAccess>,
+        val ship: Ship
+    )
 
     val shipSplit = EventEmitterImpl<ShipSplitEvent>()
 
@@ -47,6 +62,20 @@ object VSGameEvents {
         val ship: ShipId,
         val newShip: ShipId,
         val blocks: DenseBlockPosSet
+    )
+
+    data class ShipStartRenderEventSodium(
+        val pass: TerrainRenderPass,
+        val matrices: ChunkRenderMatrices,
+        val camX: Double, val camY: Double, val camZ: Double
+    )
+
+    data class ShipRenderEventSodium(
+        val pass: TerrainRenderPass,
+        val matrices: ChunkRenderMatrices,
+        val camX: Double, val camY: Double, val camZ: Double,
+        val ship: ClientShip,
+        val chunks: SortedRenderLists
     )
 }
 

@@ -2,11 +2,13 @@ package org.valkyrienskies.mod.forge.mixin.feature.water_in_ships_entity;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
+import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.FluidState;
@@ -20,6 +22,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.VSGameUtilsKt;
 
@@ -39,37 +43,65 @@ public abstract class MixinEntity {
     @Shadow
     public abstract double getZ();
 
-    @Shadow
-    public abstract boolean touchingUnloadedChunk();
-
-    @Shadow
-    public abstract AABB getBoundingBox();
-
-    @Shadow
-    public abstract boolean isPushedByFluid();
-
-    @Shadow
-    public abstract Vec3 getDeltaMovement();
-
-    @Shadow
-    public abstract void setDeltaMovement(Vec3 vec3);
-
     @Unique
     private boolean isShipWater = false;
 
+    /**
+     * used to replace updateFluidHeightAndDoFluidPushing aabb in ship context
+     * */
+    @Unique
+    private AABB valkyrienskies$fluidPushAABB = null;
+
+    /**
+     * list of fluid push to calculate
+     * used to combine updateFluidHeightAndDoFluidPushing interimCalcs of normal and ship context
+     * */
+    @Unique
+    private Object2ObjectMap<?,?> valkyrienskies$interimCalcs = null;
+
     @Shadow
-    protected abstract void setFluidTypeHeight(FluidType type, double height);
+    public abstract void updateFluidHeightAndDoFluidPushing(Predicate<FluidState> par1);
+
+    @Unique
+    private boolean inShipContext() {
+        return valkyrienskies$fluidPushAABB != null;
+    }
+
+    //IDE may show error, ignore its valid mixin
+    @ModifyVariable(
+        method = "updateFluidHeightAndDoFluidPushing(Ljava/util/function/Predicate;)V",
+        at = @At(value = "STORE"),
+        remap = false
+    )
+    private AABB setFluidPushAABB(AABB original) {
+        if (inShipContext())
+            return valkyrienskies$fluidPushAABB;
+
+        return original;
+    }
+
+    @Redirect(
+        method = "updateFluidHeightAndDoFluidPushing(Ljava/util/function/Predicate;)V",
+        at = @At(value = "NEW", target = "(I)Lit/unimi/dsi/fastutil/objects/Object2ObjectArrayMap;"),
+        remap = false
+    )
+    private Object2ObjectArrayMap<?, ?> setInterimCalcInstance(int capacity) {
+        if (inShipContext()) {
+            return (Object2ObjectArrayMap<?, ?>) valkyrienskies$interimCalcs;
+        }
+        return (Object2ObjectArrayMap<?, ?>) (valkyrienskies$interimCalcs = new Object2ObjectArrayMap<>(capacity));
+    }
 
     @Inject(
-        at = @At("HEAD"),
-        method = "updateFluidHeightAndDoFluidPushing()V",
+        method = "updateFluidHeightAndDoFluidPushing(Ljava/util/function/Predicate;)V",
+        at = @At(value = "INVOKE",
+            target = "Lit/unimi/dsi/fastutil/objects/Object2ObjectMap;forEach(Ljava/util/function/BiConsumer;)V"),
         remap = false,
         cancellable = true
     )
-    // Overwrite the forge method, since it's written in a way that's really hard to precisely mixin into.
-    private void afterFluidStateUpdate(final CallbackInfo callbackInfo) {
-        if (this.touchingUnloadedChunk()) {
-            return;
+    private void shouldProcessPush(Predicate<FluidState> shouldUpdate, CallbackInfo ci) {
+        if (inShipContext()) {
+            ci.cancel();
         }
         VSGameUtilsKt.transformFromWorldToNearbyShipsAndWorld(level, this.getBoundingBox().deflate(0.001), aabb -> {
             int i = Mth.floor(aabb.minX);
@@ -132,7 +164,11 @@ public abstract class MixinEntity {
                 this.setFluidTypeHeight((FluidType) fluidType, (Double) interim.getLeft());
             });
         });
-        callbackInfo.cancel();
+        valkyrienskies$fluidPushAABB = null;
+        valkyrienskies$interimCalcs = null;
+
+        //processing collected push (vanilla and ship)
+        instance.forEach(consumer);
     }
 
     @WrapOperation(

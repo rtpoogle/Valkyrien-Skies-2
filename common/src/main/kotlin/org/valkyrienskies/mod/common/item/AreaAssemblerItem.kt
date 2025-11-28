@@ -8,7 +8,9 @@ import net.minecraft.world.InteractionResult
 import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.context.UseOnContext
+import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.state.BlockState
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate
 import org.joml.primitives.AABBi
 import org.valkyrienskies.mod.common.ValkyrienSkiesMod.BLOCK_POS_COMPONENT
 import org.valkyrienskies.mod.common.assembly.ShipAssembler
@@ -48,33 +50,27 @@ class AreaAssemblerItem(
                     val firstPosY = firstPos.y
                     val firstPosZ = firstPos.z
                     if (level.shipObjectWorld.isBlockInShipyard(blockPos.x, blockPos.y, blockPos.z, dimensionId) != level.shipObjectWorld.isBlockInShipyard(firstPosX, firstPosY, firstPosZ, dimensionId)) {
-                        ctx.player?.sendSystemMessage(Component.translatable("Cannot assemble between ship and world!"))
-                    } else if (level.getShipObjectManagingPos(blockPos) != level.getShipObjectManagingPos(Vec3i(firstPosX, firstPosY, firstPosZ))) {
-                        ctx.player?.sendSystemMessage(Component.translatable("Cannot assemble something between two ships!"))
+                        ctx.player?.sendSystemMessage(Component.literal("Cannot assemble between ship and world!"))
+                    } else if (level.getLoadedShipManagingPos(blockPos) != level.getLoadedShipManagingPos(Vec3i(firstPosX, firstPosY, firstPosZ))) {
+                        ctx.player?.sendSystemMessage(Component.literal("Cannot assemble something between two ships!"))
                     } else {
                         val blockAABB = AABBi(blockPos.toJOML(), Vec3i(firstPosX, firstPosY, firstPosZ).toJOML())
                         blockAABB.correctBounds()
-                        val blocks = ArrayList<BlockPos>()
+                        val lowerCorner = BlockPos(blockAABB.minX, blockAABB.minY, blockAABB.minZ)
+                        val upperCorner = BlockPos(blockAABB.maxX, blockAABB.maxY, blockAABB.maxZ)
 
-                        for (x in blockAABB.minX..blockAABB.maxX) {
-                            for (y in blockAABB.minY..blockAABB.maxY) {
-                                for (z in blockAABB.minZ..blockAABB.maxZ) {
-                                    if (level.getBlockState(BlockPos(x, y, z)).isAir) {
-                                        continue
-                                    }
-                                    blocks.add(BlockPos(x, y, z))
-                                }
-                            }
-                        }
-                        ctx.player?.sendSystemMessage(
-                            Component.translatable("Assembling (${blockPos.x}, ${blockPos.y}, ${blockPos.z}) to ($firstPosX, $firstPosY, $firstPosZ)!"))
-                        ShipAssembler.assembleToShip(level, blocks, true, scale.asDouble)
+                        val structure = StructureTemplate()
+                        structure.fillFromWorld(level, lowerCorner, upperCorner.offset(1, 1, 1).subtract(lowerCorner), true, Blocks.STRUCTURE_VOID)
+
+                        ctx.player?.sendSystemMessage(Component.literal("Assembling (${blockPos.x}, ${blockPos.y}, ${blockPos.z}) to ($firstPosX, $firstPosY, $firstPosZ)!"))
+                        //ShipAssembler.assembleToShip(level, blocks, true, scale.asDouble, true)
+                        createNewShipWithStructure(lowerCorner, upperCorner, structure, level)
                     }
                     item.remove(BLOCK_POS_COMPONENT)
                 } else {
                     item.set(BLOCK_POS_COMPONENT, blockPos)
                     ctx.player?.sendSystemMessage(
-                        Component.translatable("First block selected: (${blockPos.x}, ${blockPos.y}, ${blockPos.z})"))
+                        Component.literal("First block selected: (${blockPos.x}, ${blockPos.y}, ${blockPos.z})"))
                 }
             }
         }

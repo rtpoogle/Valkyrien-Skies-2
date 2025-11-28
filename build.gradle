@@ -45,13 +45,13 @@ tasks.register("updateVsCore") {
 
     try {
         def vsCoreBuild = gradle.includedBuild("vs-core")
-        versionFile = new File(vsCoreBuild.projectDir, "api-game/build/version.txt")
+        versionFile = new File(vsCoreBuild.projectDir, "internal/build/version.txt")
 
         inputs.file(versionFile)
         outputs.file(gradleProperties)
-        dependsOn(vsCoreBuild.task(":api-game:writeVersion"))
+        dependsOn(vsCoreBuild.task(":internal:writeVersion"))
 
-        [':impl', ':api', ':api-game', ':util'].each {
+        [':impl', ':api', ':internal', ':util'].each {
             dependsOn(vsCoreBuild.task("${it}:publishToMavenLocal"))
         }
     } catch (UnknownDomainObjectException ignore) {}
@@ -83,13 +83,22 @@ subprojects {
                 }
             }
 
-            [':impl', ':api', ':api-game'].each {
+            [':impl', ':api', ':internal'].each {
                 compileJava.dependsOn(vsCoreBuild.task("${it}:publishToMavenLocal"))
             }
         } catch (UnknownDomainObjectException ignore) {}
 
         mavenCentral()
+        maven {
+            url "https://cursemaven.com"
+            content {
+                includeModule "curse.maven", "kotlinforforge-351264"
+            }
+        }
         if (!project.block_external_repositories) {
+            maven {
+                url = "https://maven.realrobotix.me/master/"
+            }
             mavenLocal()
             maven {
                 name = "ParchmentMC"
@@ -134,6 +143,12 @@ subprojects {
                 }
             }
         }
+
+        //Mixin squared
+        maven { url = "https://maven.bawnorton.com/releases" }
+
+        // Mirror
+        maven { url = "https://maven.enjarai.dev/mirrors" }
     }
 
     // Remove automatically added repos
@@ -152,6 +167,12 @@ subprojects {
         mappings loom.officialMojangMappings()
 
         compileOnly("com.google.code.findbugs:jsr305:3.0.2")
+    }
+
+    kotlin {
+        compilerOptions {
+            optIn.add("org.valkyrienskies.core.api.VsBeta")
+        }
     }
 }
 

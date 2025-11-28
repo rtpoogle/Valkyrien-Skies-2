@@ -10,6 +10,7 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 import java.util.ListIterator;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -29,6 +30,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.joml.Vector3f;
 import org.joml.primitives.AABBd;
@@ -46,13 +48,15 @@ import org.valkyrienskies.core.api.ships.Ship;
 import org.valkyrienskies.core.util.datastructures.BlockPos2ByteOpenHashMap;
 import org.valkyrienskies.mod.common.VSClientGameUtils;
 import org.valkyrienskies.mod.common.VSGameUtilsKt;
+import org.valkyrienskies.mod.common.config.ShipRenderer;
+import org.valkyrienskies.mod.common.config.ShipRendererKt;
 import org.valkyrienskies.mod.common.hooks.VSGameEvents;
 import org.valkyrienskies.mod.common.util.VectorConversionsMCKt;
 import org.valkyrienskies.mod.mixin.accessors.client.render.ViewAreaAccessor;
 import org.valkyrienskies.mod.mixinducks.client.render.LevelRendererVanillaDuck;
 
 @Mixin(value = LevelRenderer.class, priority = 999)
-public abstract class MixinLevelRendererVanilla implements LevelRendererVanillaDuck {
+public abstract class MixinLevelRendererVanilla implements LevelRendererDuck, LevelRendererVanillaDuck {
     @Unique
     private final WeakHashMap<ClientShip, ObjectArrayList<SectionRenderDispatcher.RenderSection>> vs$shipRenderChunks = new WeakHashMap<>();
     @Shadow
@@ -68,6 +72,9 @@ public abstract class MixinLevelRendererVanilla implements LevelRendererVanillaD
     @Shadow
     @Final
     private Minecraft minecraft;
+    @Shadow
+    @Final
+    private AtomicBoolean needsFrustumUpdate;
 
     @Unique
     private BlockPos2ByteOpenHashMap vs$visibileShipChunks = new BlockPos2ByteOpenHashMap();
@@ -106,10 +113,12 @@ public abstract class MixinLevelRendererVanilla implements LevelRendererVanillaD
         final BlockPos.MutableBlockPos tempPos = new BlockPos.MutableBlockPos();
         final ViewAreaAccessor chunkStorageAccessor = (ViewAreaAccessor) viewArea;
         for (final ClientShip shipObject : VSGameUtilsKt.getShipObjectWorld(level).getLoadedShips()) {
-            // Don't bother rendering the ship if its AABB isn't visible to the frustum
-            if (!frustum.isVisible(VectorConversionsMCKt.toMinecraft(shipObject.getRenderAABB()))) {
+            if (ShipRendererKt.getShipRenderer(shipObject) != ShipRenderer.VANILLA)
                 continue;
-            }
+
+            // Don't bother rendering the ship if its AABB isn't visible to the frustum
+            if (!frustum.isVisible(VectorConversionsMCKt.toMinecraft(shipObject.getRenderAABB())))
+                continue;
 
             shipObject.getActiveChunksSet().forEach((x, z) -> {
                 final LevelChunk levelChunk = level.getChunk(x, z);
@@ -144,6 +153,14 @@ public abstract class MixinLevelRendererVanilla implements LevelRendererVanillaD
                 }
             });
         }
+    }
+
+    @WrapOperation(
+        method = "*",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/core/BlockPos;distSqr(Lnet/minecraft/core/Vec3i;)D")
+    )
+    private double distToShips(BlockPos from, Vec3i to, Operation<Double> distSqr){
+        return VSGameUtilsKt.squaredDistanceBetweenInclShips(level, from.getCenter(), Vec3.atCenterOf(to), distSqr);
     }
 
     @Inject(
@@ -216,9 +233,10 @@ public abstract class MixinLevelRendererVanilla implements LevelRendererVanillaD
 
         vs$shipRenderChunks.forEach((ship, chunks) -> {
             poseStack.pushPose();
-            final Vector3dc center = ship.getRenderTransform().getPositionInShip();
+            final ShipTransform shipTransform = ship.getRenderTransform();
+            final Vector3dc cameraShipSpace = shipTransform.getWorldToShip().transformPosition(new Vector3d(camX, camY, camZ));
             VSClientGameUtils.transformRenderWithShip(ship.getRenderTransform(), poseStack,
-                center.x(), center.y(), center.z(),
+                cameraShipSpace.x(), cameraShipSpace.y(), cameraShipSpace.z(),
                 camX, camY, camZ);
 
             final var event = new VSGameEvents.ShipRenderEvent(

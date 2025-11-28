@@ -2,15 +2,14 @@ package org.valkyrienskies.mod.mixin.feature.entity_collision;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.BlockParticleOption;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -37,6 +36,31 @@ import org.valkyrienskies.mod.common.util.IEntityDraggingInformationProvider;
 public abstract class MixinEntity implements IEntityDraggingInformationProvider {
 
     // region collision
+
+    @Shadow
+    public boolean hasImpulse;
+    @Shadow
+    protected boolean firstTick;
+    @Shadow
+    public int tickCount;
+
+    @Shadow
+    public abstract void setPos(Vec3 arg);
+
+    @Shadow
+    public abstract boolean is(Entity arg);
+
+    @Shadow
+    public abstract boolean isControlledByLocalInstance();
+
+    @Shadow
+    public abstract EntityType<?> getType();
+
+    @Shadow
+    public abstract Iterable<Entity> getIndirectPassengers();
+
+    @Shadow
+    public abstract BlockPos getOnPos();
 
     /**
      * Cancel movement of entities that are colliding with unloaded ships
@@ -71,11 +95,20 @@ public abstract class MixinEntity implements IEntityDraggingInformationProvider 
         if (collisionResultWithWorld.distanceToSqr(movement) > 1e-12) {
             // We collided with the world? Set the dragging ship to null.
             final EntityDraggingInformation entityDraggingInformation = getDraggingInformation();
+            if (entityDraggingInformation.getIgnoreNextGroundStand()) {
+                entityDraggingInformation.setIgnoreNextGroundStand(false);
+                return collisionResultWithWorld;
+            }
             entityDraggingInformation.setLastShipStoodOn(null);
-            entityDraggingInformation.setAddedMovementLastTick(new Vector3d());
             entityDraggingInformation.setAddedYawRotLastTick(0.0);
-        }
 
+            for (Entity entityRiding : entity.getIndirectPassengers()) {
+                final EntityDraggingInformation passengerDraggingInformation =
+                    ((IEntityDraggingInformationProvider) entityRiding).getDraggingInformation();
+                passengerDraggingInformation.setLastShipStoodOn(null);
+                passengerDraggingInformation.setAddedYawRotLastTick(0.0);
+            }
+        }
         return collisionResultWithWorld;
     }
 
@@ -139,7 +172,7 @@ public abstract class MixinEntity implements IEntityDraggingInformationProvider 
             final Vector3dc blockPosInLocal =
                 ship.getTransform().getWorldToShip().transformPosition(blockPosInGlobal, new Vector3d());
             final BlockPos blockPos = BlockPos.containing(
-                Math.floor(blockPosInLocal.x()), Math.floor(blockPosInLocal.y()), Math.floor(blockPosInLocal.z())
+                blockPosInLocal.x(), blockPosInLocal.y(), blockPosInLocal.z()
             );
             final BlockState blockState = level.getBlockState(blockPos);
             if (!blockState.isAir()) {
@@ -149,9 +182,7 @@ public abstract class MixinEntity implements IEntityDraggingInformationProvider 
                 final Vector3dc blockPosInLocal2 = ship.getTransform().getWorldToShip()
                     .transformPosition(
                         new Vector3d(blockPosInGlobal.x(), blockPosInGlobal.y() - 1.0, blockPosInGlobal.z()));
-                final BlockPos blockPos2 = BlockPos.containing(
-                    Math.round(blockPosInLocal2.x()), Math.round(blockPosInLocal2.y()), Math.round(blockPosInLocal2.z())
-                );
+                final BlockPos blockPos2 = BlockPos.containing(blockPosInLocal2.x(), blockPosInLocal2.y(), blockPosInLocal2.z());
                 final BlockState blockState2 = level.getBlockState(blockPos2);
                 if (!blockState2.isAir()) {
                     return blockPos2;
@@ -161,28 +192,15 @@ public abstract class MixinEntity implements IEntityDraggingInformationProvider 
         return null;
     }
 
-    @Inject(method = "getBlockPosBelowThatAffectsMyMovement", at = @At("HEAD"), cancellable = true)
-    private void preGetBlockPosBelowThatAffectsMyMovement(final CallbackInfoReturnable<BlockPos> cir) {
-        final Vector3dc blockPosInGlobal = new Vector3d(
-            position.x,
-            getBoundingBox().minY - 0.5,
-            position.z
-        );
-        final BlockPos blockPosStandingOnFromShip = getPosStandingOnFromShips(blockPosInGlobal);
-        if (blockPosStandingOnFromShip != null) {
-            cir.setReturnValue(blockPosStandingOnFromShip);
-        }
-    }
-
     /**
      * @author tri0de
      * @reason Allows ship blocks to spawn landing particles, running particles, and play step sounds
      */
-    @Inject(method = "getOnPos", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "getOnPos(F)Lnet/minecraft/core/BlockPos;", at = @At("HEAD"), cancellable = true)
     private void preGetOnPos(final CallbackInfoReturnable<BlockPos> cir) {
         final Vector3dc blockPosInGlobal = new Vector3d(
             position.x,
-            position.y - 0.2,
+            position.y,
             position.z
         );
         final BlockPos blockPosStandingOnFromShip = getPosStandingOnFromShips(blockPosInGlobal);
@@ -216,6 +234,7 @@ public abstract class MixinEntity implements IEntityDraggingInformationProvider 
             }
         }
     }
+
     // endregion
 
     // region shadow functions and fields

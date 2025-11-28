@@ -20,7 +20,7 @@ object ForgeHooksImpl : CommonHooksImpl() {
         VSForgeNetworking.sendToServer(buf)
     }
 
-    override fun sendToClient(buf: ByteBuf, player: IPlayer) {
+    override fun sendToClient(buf: ByteBuf, player: VsiPlayer) {
         VSForgeNetworking.sendToClient(buf, player)
     }
 }
